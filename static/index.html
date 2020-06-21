@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>File Watcher Web App</title>
+    <!-- Debug -->
+    <!-- <script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script> -->
+
+    <script src="//cdn.jsdelivr.net/npm/vue@2.6.11"></script>
+
+    <!-- Load required Bootstrap and BootstrapVue CSS -->
+    <link type="text/css" rel="stylesheet" href="//unpkg.com/bootstrap/dist/css/bootstrap.min.css" />
+    <link type="text/css" rel="stylesheet" href="//unpkg.com/bootstrap-vue@latest/dist/bootstrap-vue.min.css" />
+
+    <!-- Load polyfills to support older browsers -->
+    <script src="//polyfill.io/v3/polyfill.min.js?features=es2015%2CIntersectionObserver"></script>
+
+    <!-- Load Vue followed by BootstrapVue -->
+    <script src="//unpkg.com/bootstrap-vue@latest/dist/bootstrap-vue.min.js"></script>
+
+    <!-- Load the following for BootstrapVueIcons support -->
+    <script src="//unpkg.com/bootstrap-vue@latest/dist/bootstrap-vue-icons.min.js"></script>
+  </head>
+  <body>
+    <div id="app">
+
+      <!-- START: b-navbar -->
+      <b-navbar toggleable="lg" type="dark" variant="dark">
+        <b-navbar-toggle target="nav-collapse"></b-navbar-toggle>
+
+        <b-collapse id="nav-collapse" is-nav>
+
+          <!-- Right aligned nav items -->
+          <b-navbar-nav class="ml-auto">
+            <b-navbar-brand>Watching file: {{ activeFullPath }}
+              <b-icon-circle-fill :style="{ color: getWsStatus() }"></b-icon-circle-fill>
+            </b-navbar-brand>
+
+            <b-button b-button size="sm" class="my-2 my-sm-0" v-b-toggle.sidebar-variant>File Explorer</b-button>
+
+            <b-navbar-brand style="margin-left: 15px">
+              Auto scroll
+              <b-icon-circle-fill :style="{ color: autoScroll ? 'green' : 'red' }"></b-icon-circle-fill>
+            </b-navbar-brand>
+            <b-button @click="scrollToEnd" b-button size="sm" class="my-2 my-sm-0" @click="scrollToEnd">
+              <b-icon-arrow-down-square-fill v-if="autoScroll"></b-icon-arrow-down-square-fill>
+              <b-icon-arrow-down-square v-else></b-icon-arrow-down-square>
+            </b-button>
+          </b-navbar-nav>
+        </b-collapse>
+      </b-navbar>
+      <!-- END: b-navbar -->
+
+      <!-- START: b-sidebar / file explorer -->
+      <b-sidebar id="sidebar-variant" bg-variant="dark" text-variant="light" title="File Explorer" backdrop shadow>
+        <div class="px-3 py-2">
+          <p
+            v-for="path in paths"
+            v-show="path.show"
+            :style="{
+                     marginLeft: path.depth * 20 + 'px',
+                     fontWeight: path.fullPath == activeFullPath ? 'bold' : 'normal',
+                     textDecoration: path.fullPath == activeFullPath ? 'underline' : '',
+                     }"
+            >
+            <b-link
+              style="color: white"
+              @click="path.isDir ? toggleDirShow(path) : updateWebsocket(path.fullPath)"
+              >
+              <b-icon-folder-minus v-if="path.isDir && path.expanded"></b-icon-folder-minus>
+              <b-icon-folder-plus v-else-if="path.isDir && !path.expanded"></b-icon-folder-plus>
+              <b-icon-file-text v-else></b-icon-file-text>
+              {{ path.name }}
+            </b-link>
+          </p>
+        </div>
+      </b-sidebar>
+      <!-- END: b-sidebar / file explorer -->
+
+      <!-- START: b-container / output message b-card -->
+      <b-container fluid>
+        <b-row align-v="stretch">
+          <b-col style="margin-top: 30px" cols="12" align-v="stretch">
+            <b-card no-body>
+              <b-card-body
+                id="nav-scroller"
+                ref="content"
+                style="position:relative; height:90vh; overflow-y:scroll;"
+                >
+                <pre>{{ message }}</pre>
+              </b-card-body>
+            </b-card>
+          </b-col>
+        </b-row>
+      </b-container>
+      <!-- END: b-container / output message b-card -->
+    </div>
+
+    <script>
+      var vm = new Vue({
+        el: '#app',
+
+        data: {
+          paths: [[.Paths]],
+          message: "Toggle 'File Explorer' to select file to watch...",
+          connection: null,
+          activeFullPath: "No file selected",
+          autoScroll: false,
+          intervalID: null,
+          wsStatus: {
+            DISCONNECTED: 0,
+            CONNECTED: 1,
+            CONNECTING: 2,
+          },
+          wsStatusCurrent: 0,
+        },
+
+        methods: {
+          closeWebSocket: function (){
+            if (this.connection != null) {
+              vm.message = `Closing WebSocket ${this.connection.url}...`
+              this.connection.close()
+            }
+
+          },
+
+          updateWebsocket: function(path) {
+            this.closeWebSocket()
+
+            vm.activeFullPath = path
+            var url = "ws://[[.BackendURL]]/ws?filename=" + path
+            vm.message += `\nStarting connection to WebSocket Server ${url}...`
+            vm.wsStatusCurrent = this.wsStatus.CONNECTING
+            this.connection = new WebSocket(url)
+
+            this.connection.onerror = function (event) {
+              vm.wsStatusCurrent = vm.wsStatus.DISCONNECTED
+              vm.message += `\nCannot connect to WebSocket Server ${url}...`
+            }
+
+            this.connection.onmessage = function(event) {
+              vm.wsStatusCurrent = vm.wsStatus.CONNECTED
+              vm.message = event.data
+            }
+
+            this.connection.onopen = function(event) {
+              vm.wsStatusCurrent = vm.wsStatus.CONNECTING
+            }
+
+            this.connection.onclose = function(event) {
+              vm.wsStatusCurrent = vm.wsStatus.DISCONNECTED
+            }
+          },
+
+          scrollToEnd: function() {
+            if (!this.autoScroll) {
+              vm.autoScroll = true
+              var container = this.$el.querySelector("#nav-scroller");
+              container.scrollTop = container.scrollHeight;
+              vm.intervalID = setInterval(function(){
+                container.scrollTop = container.scrollHeight;
+              }, 1000);
+              return
+            }
+
+            clearInterval(this.intervalID)
+            vm.intervalID = null
+            vm.autoScroll = false
+          },
+
+          getWsStatus: function() {
+            if (this.wsStatusCurrent == this.wsStatus.DISCONNECTED) {
+              return 'red'
+            }
+
+            if (this.wsStatusCurrent == this.wsStatus.CONNECTING) {
+              return 'yellow'
+            }
+
+            if (this.wsStatusCurrent == this.wsStatus.CONNECTED) {
+              return 'green'
+            }
+          },
+
+          toggleDirShow: function(path) {
+            for (i = 0; i < vm.paths.length; i++) {
+
+              if (vm.paths[i].fullPath == path.fullPath) {
+                vm.paths[i].expanded = vm.paths[i].expanded ? false : true
+              }
+
+              if (vm.paths[i].depth > path.depth) {
+                vm.paths[i].show = path.expanded
+                vm.paths[i].expanded = path.expanded
+              }
+
+            }
+          }
+
+        }
+      })
+    </script>
+  </body>
+</html>
