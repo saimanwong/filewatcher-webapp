@@ -11,8 +11,6 @@ Usage of main:
         http service address (default ":8080")
   -backend string
         backend url for frontend (default "localhost:8080")
-  -dir string
-        root dir to watch (default "watch-this-dir")
 ```
 
 ## Development
@@ -20,7 +18,7 @@ Usage of main:
 Run below and open http://localhost:8080
 
 ```
-$ go run main.go
+$ go run main.go watch-this-dir
 ```
 
 ## Acknowledgments

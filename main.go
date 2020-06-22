@@ -38,12 +38,15 @@ const (
 var (
 	addr       = flag.String("addr", ":8080", "http service address")
 	backendURL = flag.String("backend", "localhost:8080", "backend url for frontend")
-	rootDir    = flag.String("dir", "watch-this-dir", "root dir to watch")
 	homeTempl  = template.Must(template.New("index.html").Delims("[[", "]]").ParseFiles("static/index.html"))
 	upgrader   = websocket.Upgrader{
 		ReadBufferSize:  1024,
 		WriteBufferSize: 1024,
 	}
+
+	fullPath  string
+	basePath  string
+	watchPath string
 )
 
 type File struct {
@@ -131,8 +134,8 @@ func serveWs(w http.ResponseWriter, r *http.Request) {
 	// Validate request to prevent path traversal
 	// https://owasp.org/www-community/attacks/Path_Traversal
 	fs := strings.Split(filename, "/")
-	if fs[0] != *rootDir {
-		log.Printf("%s requested for non rootDir path %s", r.RemoteAddr, filename)
+	if fs[0] != watchPath {
+		log.Printf("%s requested for non path %s", r.RemoteAddr, filename)
 		return
 	}
 
@@ -155,24 +158,27 @@ func serveWs(w http.ResponseWriter, r *http.Request) {
 		lastMod = time.Unix(0, n)
 	}
 
-	go writer(ws, lastMod, filename)
+	fullFilename := basePath + filename
+	go writer(ws, lastMod, fullFilename)
 	reader(ws)
 }
 
 func getPaths() []File {
 	paths := []File{}
-	err := filepath.Walk(*rootDir,
+	err := filepath.Walk(fullPath,
 		func(path string, info os.FileInfo, err error) error {
 			if err != nil {
 				return err
 			}
-			files := strings.Split(path, "/")
+
+			modifiedPath := strings.Replace(path, basePath, "", -1)
+			files := strings.Split(modifiedPath, "/")
 			depth := len(files) - 1
 
 			paths = append(paths, File{
 				IsDir:    info.IsDir(),
 				Name:     files[len(files)-1],
-				FullPath: path,
+				FullPath: modifiedPath,
 				Depth:    depth,
 				Show:     true,
 				Expanded: true,
@@ -221,9 +227,31 @@ func serveHome(w http.ResponseWriter, r *http.Request) {
 
 func main() {
 	flag.Parse()
+	if flag.NArg() != 1 {
+		log.Fatal("No file or directory specified")
+	}
+
+	fullPath = flag.Args()[0]
+
+	_, err := os.Stat(fullPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	log.Printf("Going to watch %s", fullPath)
+
+	pathSpl := strings.Split(fullPath, "/")
+	watchPath = pathSpl[len(pathSpl)-1]
+	basePath = ""
+	if len(pathSpl) > 1 {
+		basePath = strings.Join(pathSpl[:len(pathSpl)-1], "/") + "/"
+	}
+
 	http.HandleFunc("/", serveHome)
 	http.HandleFunc("/ws", serveWs)
-	if err := http.ListenAndServe(*addr, nil); err != nil {
+
+	err = http.ListenAndServe(*addr, nil)
+	if err != nil {
 		log.Fatal(err)
 	}
 }
