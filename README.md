@@ -26,3 +26,8 @@ $ go run main.go
 ## Acknowledgments
 
 * Build upon [gorilla/websocket example code](https://github.com/gorilla/websocket/tree/v1.4.2/examples/filewatch)
+
+## Screenshots
+
+[![](https://github.com/saimanwong/filewatcher-webapp/raw/master/screenshots/1.png)](https://github.com/saimanwong/filewatcher-webapp/raw/master/screenshots/1.png)
+[![](https://github.com/saimanwong/filewatcher-webapp/raw/master/screenshots/2.png)](https://github.com/saimanwong/filewatcher-webapp/raw/master/screenshots/2.png)
