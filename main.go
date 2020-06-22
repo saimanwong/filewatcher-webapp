@@ -5,6 +5,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"html/template"
 	"io/ioutil"
@@ -131,17 +132,10 @@ func serveWs(w http.ResponseWriter, r *http.Request) {
 	filename := r.FormValue("filename")
 	log.Printf("%s requested for %s", r.RemoteAddr, filename)
 
-	// Validate request to prevent path traversal
-	// https://owasp.org/www-community/attacks/Path_Traversal
-	fs := strings.Split(filename, "/")
-	if fs[0] != watchPath {
-		log.Printf("%s requested for non path %s", r.RemoteAddr, filename)
-		return
-	}
-
-	rc, _ := regexp.Compile(`^[a-zA-Z0-9\/-]*\.?[a-zA-Z0-9\/-]*$`)
-	if !rc.MatchString(filename) {
-		log.Printf("%s requested for path %s which does not match regex", r.RemoteAddr, filename)
+	// Validate filename
+	err := validateFilename(filename)
+	if err != nil {
+		log.Printf("%s requested for %s, but failed to validate (%s)", r.RemoteAddr, filename, err)
 		return
 	}
 
@@ -161,6 +155,23 @@ func serveWs(w http.ResponseWriter, r *http.Request) {
 	fullFilename := basePath + filename
 	go writer(ws, lastMod, fullFilename)
 	reader(ws)
+}
+
+// Validate request to prevent path traversal
+// https://owasp.org/www-community/attacks/Path_Traversal
+// Returns nil if filename is ok, otherwise error
+func validateFilename(filename string) error {
+	fs := strings.Split(filename, "/")
+	if fs[0] != watchPath {
+		return errors.New("filename must begin with the path")
+	}
+
+	rc, _ := regexp.Compile(`^[a-zA-Z0-9\/-]*\.?[a-zA-Z0-9\/-]*$`)
+	if !rc.MatchString(filename) {
+		return errors.New("filename must only contain one dot")
+	}
+
+	return nil
 }
 
 func getPaths() []File {
