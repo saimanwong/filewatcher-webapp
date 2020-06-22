@@ -167,7 +167,7 @@ func getPaths() []File {
 				return err
 			}
 			files := strings.Split(path, "/")
-			depth := len(files)
+			depth := len(files) - 1
 
 			paths = append(paths, File{
 				IsDir:    info.IsDir(),

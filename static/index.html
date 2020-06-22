@@ -182,15 +182,18 @@
           },
 
           toggleDirShow: function(path) {
+            curr = null
             for (i = 0; i < vm.paths.length; i++) {
+              curr = vm.paths[i]
+              pathSpl = path.fullPath.split("/")
 
-              if (vm.paths[i].fullPath == path.fullPath) {
-                vm.paths[i].expanded = vm.paths[i].expanded ? false : true
+              if (curr.fullPath == path.fullPath) {
+                curr.expanded = curr.expanded ? false : true
               }
 
-              if (vm.paths[i].depth > path.depth) {
-                vm.paths[i].show = path.expanded
-                vm.paths[i].expanded = path.expanded
+              if (curr.depth > path.depth && curr.fullPath.split("/")[path.depth] == path.name) {
+                curr.show = path.expanded
+                curr.expanded = path.expanded
               }
 
             }
