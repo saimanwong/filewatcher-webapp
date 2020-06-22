@@ -126,19 +126,19 @@ func writer(ws *websocket.Conn, lastMod time.Time, filename string) {
 
 func serveWs(w http.ResponseWriter, r *http.Request) {
 	filename := r.FormValue("filename")
-	log.Printf("%s requested for %s", r.Host, filename)
+	log.Printf("%s requested for %s", r.RemoteAddr, filename)
 
 	// Validate request to prevent path traversal
 	// https://owasp.org/www-community/attacks/Path_Traversal
 	fs := strings.Split(filename, "/")
 	if fs[0] != *rootDir {
-		log.Printf("%s requested for non rootDir path %s", r.Host, filename)
+		log.Printf("%s requested for non rootDir path %s", r.RemoteAddr, filename)
 		return
 	}
 
 	rc, _ := regexp.Compile(`^[a-zA-Z0-9\/-]*\.?[a-zA-Z0-9\/-]*$`)
 	if !rc.MatchString(filename) {
-		log.Printf("%s requested for path %s which does not match regex", r.Host, filename)
+		log.Printf("%s requested for path %s which does not match regex", r.RemoteAddr, filename)
 		return
 	}
 
@@ -215,7 +215,7 @@ func serveHome(w http.ResponseWriter, r *http.Request) {
 		strconv.FormatInt(lastMod.UnixNano(), 16),
 		paths,
 	}
-	log.Printf("%s connected", r.Host)
+	log.Printf("%s connected", r.RemoteAddr)
 	homeTempl.Execute(w, &v)
 }
 
