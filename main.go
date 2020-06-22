@@ -249,8 +249,6 @@ func main() {
 		log.Fatalf("ERR %s", err)
 	}
 
-	log.Printf("INFO going to watch %s", fullPath)
-
 	pathSpl := strings.Split(fullPath, "/")
 	watchPath = pathSpl[len(pathSpl)-1]
 	basePath = ""
@@ -260,6 +258,10 @@ func main() {
 
 	http.HandleFunc("/", serveHome)
 	http.HandleFunc("/ws", serveWs)
+
+	log.Printf("INFO backend listens on %s", *addr)
+	log.Printf("INFO frontend connects to %s", *backendURL)
+	log.Printf("INFO going to watch %s", fullPath)
 
 	err = http.ListenAndServe(*addr, nil)
 	if err != nil {
