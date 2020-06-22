@@ -130,12 +130,12 @@ func writer(ws *websocket.Conn, lastMod time.Time, filename string) {
 
 func serveWs(w http.ResponseWriter, r *http.Request) {
 	filename := r.FormValue("filename")
-	log.Printf("%s requested for %s", r.RemoteAddr, filename)
+	log.Printf("INFO %s requested for %s", r.RemoteAddr, filename)
 
 	// Validate filename
 	err := validateFilename(filename)
 	if err != nil {
-		log.Printf("%s requested for %s, but failed to validate (%s)", r.RemoteAddr, filename, err)
+		log.Printf("WARN %s requested for %s, but failed to validate (%s)", r.RemoteAddr, filename, err)
 		return
 	}
 
@@ -143,7 +143,7 @@ func serveWs(w http.ResponseWriter, r *http.Request) {
 	ws, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		if _, ok := err.(websocket.HandshakeError); !ok {
-			log.Println(err)
+			log.Printf("WARN %s", err)
 		}
 		return
 	}
@@ -199,7 +199,7 @@ func getPaths() []File {
 	)
 
 	if err != nil {
-		log.Println(err)
+		log.Printf("WARN %s", err)
 	}
 
 	sort.SliceStable(paths, func(i, j int) bool {
@@ -232,24 +232,24 @@ func serveHome(w http.ResponseWriter, r *http.Request) {
 		strconv.FormatInt(lastMod.UnixNano(), 16),
 		paths,
 	}
-	log.Printf("%s connected", r.RemoteAddr)
+	log.Printf("INFO %s connected", r.RemoteAddr)
 	homeTempl.Execute(w, &v)
 }
 
 func main() {
 	flag.Parse()
 	if flag.NArg() != 1 {
-		log.Fatal("No file or directory specified")
+		log.Fatal("ERR no file or directory specified")
 	}
 
 	fullPath = flag.Args()[0]
 
 	_, err := os.Stat(fullPath)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("ERR %s", err)
 	}
 
-	log.Printf("Going to watch %s", fullPath)
+	log.Printf("INFO going to watch %s", fullPath)
 
 	pathSpl := strings.Split(fullPath, "/")
 	watchPath = pathSpl[len(pathSpl)-1]
@@ -263,6 +263,6 @@ func main() {
 
 	err = http.ListenAndServe(*addr, nil)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("ERR %s", err)
 	}
 }
