@@ -19,6 +19,7 @@
 
     <!-- Load the following for BootstrapVueIcons support -->
     <script src="//unpkg.com/bootstrap-vue@latest/dist/bootstrap-vue-icons.min.js"></script>
+
   </head>
   <body>
     <div id="app">
@@ -35,8 +36,12 @@
 
           <!-- Right aligned nav items -->
           <b-navbar-nav class="ml-auto">
-            <b-navbar-brand>Watching file: {{ activeFullPath }}
-              <b-icon-circle-fill :style="{ color: getWsStatus() }"></b-icon-circle-fill>
+            <b-navbar-brand>Watching file: {{ currentPath == null ? 'No file selected' : currentPath }}
+              <b-link :style="{ pointerEvents: currentPath == null || getWsStatus().status == wsStatus.CONNECTING ? 'none' : 'auto' }"
+                        :disabled="currentPath == null || getWsStatus().status == wsStatus.CONNECTING ? true : false"
+                        @click="getWsStatus().status == wsStatus.OPEN ? closeWebsocket() : updateWebsocket(currentPath)">
+                <b-icon-circle-fill :style="{ color: getWsStatus().color }"></b-icon-circle-fill>
+              </b-link>
             </b-navbar-brand>
 
             <b-button b-button size="sm" class="my-2 my-sm-0" v-b-toggle.sidebar-variant>File Explorer</b-button>
@@ -62,8 +67,8 @@
             v-show="path.show"
             :style="{
                      marginLeft: path.depth * 20 + 'px',
-                     fontWeight: path.fullPath == activeFullPath ? 'bold' : 'normal',
-                     textDecoration: path.fullPath == activeFullPath ? 'underline' : '',
+                     fontWeight: path.fullPath == currentPath ? 'bold' : 'normal',
+                     textDecoration: path.fullPath == currentPath ? 'underline' : '',
                      }"
             >
             <b-link
@@ -105,90 +110,125 @@
 
         data: {
           paths: [[.Paths]],
+          currentPath: null,
           message: "Toggle 'File Explorer' to select file to watch...",
           connection: null,
-          activeFullPath: "No file selected",
           autoScroll: false,
           intervalID: null,
+          wsStatusCurrent: null,
+
+          // https://developer.mozilla.org/en-US/docs/Web/API/WebSocket/readyState
+          // 0 CONNECTING  Socket has been created. The connection is not yet open.
+          // 1 OPEN  The connection is open and ready to communicate.
+          // 2 CLOSING The connection is in the process of closing.
+          // 3 CLOSED  The connection is closed or couldn't be opened.
           wsStatus: {
-            DISCONNECTED: 0,
-            CONNECTED: 1,
-            CONNECTING: 2,
+            CONNECTING: 0,
+            OPEN: 1,
+            CLOSING: 2,
+            CLOSED: 3,
           },
-          wsStatusCurrent: 0,
         },
 
         methods: {
-          closeWebSocket: function (){
+          closeWebsocket: function (){
             if (this.connection != null) {
-              vm.message = `Closing WebSocket ${this.connection.url}...`
+              this.message = null
+              this.log(`Closing WebSocket ${this.connection.url}...`)
               this.connection.close()
             }
 
           },
 
           updateWebsocket: function(path) {
-            this.closeWebSocket()
+            if (path == null) {
+              return
+            }
 
-            vm.activeFullPath = path
+            if (this.connection != null && this.connection.readyState != this.wsStatus.CLOSED) {
+              this.closeWebsocket()
+            }
+
+
             var url = "ws://[[.BackendURL]]/ws?filename=" + path
-            vm.message += `\nStarting connection to WebSocket Server ${url}...`
-            vm.wsStatusCurrent = this.wsStatus.CONNECTING
             this.connection = new WebSocket(url)
 
             this.connection.onerror = function (event) {
-              vm.wsStatusCurrent = vm.wsStatus.DISCONNECTED
-              vm.message += `\nCannot connect to WebSocket Server ${url}...`
+              vm.wsStatusCurrent = vm.wsStatus.CLOSED
+              vm.log(`Cannot connect to WebSocket Server ${url}...`)
             }
 
             this.connection.onmessage = function(event) {
-              vm.wsStatusCurrent = vm.wsStatus.CONNECTED
+              vm.wsStatusCurrent = vm.wsStatus.OPEN
+              vm.currentPath = path
               vm.message = event.data
             }
 
             this.connection.onopen = function(event) {
               vm.wsStatusCurrent = vm.wsStatus.CONNECTING
+              vm.log(`Starting connection to WebSocket Server ${url}...`)
             }
 
             this.connection.onclose = function(event) {
-              vm.wsStatusCurrent = vm.wsStatus.DISCONNECTED
+              vm.wsStatusCurrent = vm.wsStatus.CLOSED
+              vm.log(`Closed WebSocket ${url}...`)
             }
+          },
+
+          log: function(str) {
+            if (this.message == null) {
+              this.message = ""
+            }
+            if (this.message.length > 0) {
+              this.message += "\n" + str
+              return
+            }
+
+            this.message = str
           },
 
           scrollToEnd: function() {
             if (!this.autoScroll) {
-              vm.autoScroll = true
+              this.autoScroll = true
               var container = this.$el.querySelector("#nav-scroller");
               container.scrollTop = container.scrollHeight;
-              vm.intervalID = setInterval(function(){
+              this.intervalID = setInterval(function(){
                 container.scrollTop = container.scrollHeight;
               }, 1000);
               return
             }
 
             clearInterval(this.intervalID)
-            vm.intervalID = null
-            vm.autoScroll = false
+            this.intervalID = null
+            this.autoScroll = false
           },
 
           getWsStatus: function() {
-            if (this.wsStatusCurrent == this.wsStatus.DISCONNECTED) {
-              return 'red'
+            status = this.wsStatusCurrent
+            if (status == this.wsStatus.CONNECTING) {
+              return {
+                status: this.wsStatus.CONNECTING,
+                color: 'yellow'
+              }
             }
 
-            if (this.wsStatusCurrent == this.wsStatus.CONNECTING) {
-              return 'yellow'
+            if (status == this.wsStatus.OPEN) {
+              return {
+                status: this.wsStatus.OPEN,
+                color: 'green',
+              }
             }
 
-            if (this.wsStatusCurrent == this.wsStatus.CONNECTED) {
-              return 'green'
+            return {
+              status: this.wsStatus.CLOSED,
+              color: 'red',
             }
           },
 
           toggleDirShow: function(path) {
             curr = null
-            for (i = 0; i < vm.paths.length; i++) {
-              curr = vm.paths[i]
+            for (i = 0; i < this.paths.length; i++) {
+              curr = this.paths[i]
               pathSpl = path.fullPath.split("/")
 
               if (curr.fullPath == path.fullPath) {
